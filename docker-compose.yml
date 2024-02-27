@@ -1,0 +1,32 @@
+version: '3'
+services:
+  db: 
+    image: mysql:latest
+    command: ["--log_bin_trust_function_creators=1"]
+    environment:
+      - MYSQL_DATABASE=php_docker
+      - MYSQL_USER=php_docker
+      - MYSQL_PASSWORD=password 
+      - MYSQL_ALLOW_EMPTY_PASSWORD=1
+    volumes:
+      - "./db/data:/docker-entrypoint-initdb.d"
+    ports:
+      - 3306:3306
+  www:
+    build: ./docker
+    volumes:
+      - "./public/:/var/www/html" # sync the current dir on local machine to the dir of container
+    ports:
+      - 80:80
+      - 443:443 # for future ssl traffic
+    environment:
+      DATASOURCE_URL: jdbc:mysql://docker-mysql:3306/database?autoReconnect=true&useSSL=false
+    depends_on:
+       - db
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    ports:
+      - 8001:80
+    environment:
+      - PMA_HOST=db
+      - PMA_PORT=3306
