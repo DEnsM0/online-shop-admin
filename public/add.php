@@ -34,9 +34,9 @@ $all_table_names = $database->selectAllTableNames();
                         $('.attribute-inputs').remove();
                         $('#notification').text('');
                         // Input fields primary keys
-                        if(selectedTable === "BESTELLUNG" || selectedTable === "BEINHALTET" || selectedTable === "KATEGORIE" || selectedTable === "BEWERTUNG"){
+                        if(selectedTable === "order_" || selectedTable === "contains" || selectedTable === "category" || selectedTable === "review"){
                             result.primaryKeys.forEach(function(attribute) {
-                            if (selectedTable === "BEWERTUNG" && attribute !== "ARTIKELID") {
+                            if (selectedTable === "review" && attribute !== "item_id") {
                                 return;
                             }
                             var inputField = '<div class="form-group row attribute-inputs">' +

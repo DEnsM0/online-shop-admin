@@ -71,7 +71,7 @@ class DatabaseHelper
             $columnName = $columnInfo['COLUMN_NAME'];
             $dataType = $columnInfo['DATA_TYPE'];
             
-            // handle CLOB
+            // Handle CLOB
             $columnExpression = ($dataType === 'longtext') ? "CONVERT($columnName USING utf8) AS $columnName" : $columnName;
 
             $columns[] = $columnExpression;
@@ -101,14 +101,98 @@ class DatabaseHelper
         mysqli_free_result($result);
 
         return $res;
-    }    
+    }
+
+    public function selectRowsWithKeys($selectedTable, $keyValuePairs)
+    {
+        // Prepare statement
+        $columnInfoSql = "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ?";
+        $columnInfoStatement = mysqli_prepare($this->conn, $columnInfoSql);
+        mysqli_stmt_bind_param($columnInfoStatement, "s", $selectedTable);
+        mysqli_stmt_execute($columnInfoStatement);
+        mysqli_stmt_store_result($columnInfoStatement);
+    
+        // Bind result variables
+        mysqli_stmt_bind_result($columnInfoStatement, $columnName, $dataType);
+    
+        $columns = array();
+        while (mysqli_stmt_fetch($columnInfoStatement)) {
+            $columns[] = $columnName;
+        }
+    
+        mysqli_stmt_free_result($columnInfoStatement);
+        mysqli_stmt_close($columnInfoStatement);
+    
+        // WHERE clause
+        $whereConditions = [];
+        foreach ($keyValuePairs as $key => $value) {
+            $whereConditions[] = "$key LIKE ?";
+        }
+    
+        $whereClause = '';
+        if (!empty($whereConditions)) {
+            $whereClause = 'WHERE ' . implode(' AND ', $whereConditions);
+        }
+    
+        // Prepare query 
+        $sql = "SELECT " . implode(", ", $columns) . " FROM $selectedTable $whereClause";
+        $statement = mysqli_prepare($this->conn, $sql);
+    
+        // Bind parameters for WHERE
+        $types = str_repeat("s", count($keyValuePairs));
+        $values = array_values($keyValuePairs);
+        mysqli_stmt_bind_param($statement, $types, ...$values);
+    
+        mysqli_stmt_execute($statement);
+    
+        $result = mysqli_stmt_get_result($statement);
+    
+        $res = array();
+    
+        // Fetch column names
+        $columns = [];
+        while ($field = mysqli_fetch_field($result)) {
+            $columns[] = $field->name;
+        }
+        $res['columns'] = $columns;
+    
+        // Fetch values as arrays of strings
+        $values = [];
+        while ($row = mysqli_fetch_array($result, MYSQLI_NUM)) {
+            $values[] = $row;
+        }
+        $res['values'] = $values;
+    
+        mysqli_free_result($result);
+        mysqli_stmt_close($statement);
+    
+        return $res;
+    }
+    
+
+    public function retrieveArticlesData($userId, $supplierId, $sCardId)
+    {
+        $sql = "CALL GetArticlesInOrder(?, ?, ?)";
+        $statement = mysqli_prepare($this->conn, $sql);
+        mysqli_stmt_bind_param($statement, 'iii', $userId, $supplierId, $sCardId);
+        mysqli_stmt_execute($statement);
+    
+        // Fetch results
+        $result = mysqli_stmt_get_result($statement);
+        $articleCursorResult = mysqli_fetch_all($result, MYSQLI_ASSOC);
+    
+        mysqli_stmt_close($statement);
+    
+        return $articleCursorResult;
+    }
+    
 
     public function getKeysAndAttributes($tableName)
     {
         $primaryKeys = array();
         $nonPrimaryKeys = array();
 
-        // primary key columns
+        // Primary key columns
         $sql = "
             SELECT 
                 COLUMN_NAME AS PRIMARYKEYCOLUMN
@@ -126,7 +210,7 @@ class DatabaseHelper
             $primaryKeys[] = $row['PRIMARYKEYCOLUMN'];
         }
 
-        // non-primary key columns
+        // Non-primary key columns
         $sql = "
             SELECT 
                 COLUMN_NAME AS NON_PRIMARY_KEY_COLUMN
@@ -146,26 +230,26 @@ class DatabaseHelper
 
         return array('primaryKeys' => $primaryKeys, 'nonPrimaryKeys' => $nonPrimaryKeys);
     }
-    
+
     public function insertIntoTable($tableName, $formData)
     {
-        // validate input
+        // Validate input
         if (empty($tableName) || !is_array($formData) || empty($formData)) {
             return false;
         }
 
-        // construct query
+        // Construct query
         $keys = implode(", ", array_keys($formData));
         $placeholders = rtrim(str_repeat('?, ', count($formData)), ', ');
         $sql = "INSERT INTO $tableName ($keys) VALUES ($placeholders)";
 
-        // prepare and execute statement
+        // Prepare and execute statement
         $statement = mysqli_prepare($this->conn, $sql);
         if ($statement === false) {
             return false;
         }
 
-        // prepare types string and values array
+        // Prepare types string and values array
         $types = '';
         $values = [];
         foreach ($formData as $value) {
@@ -175,6 +259,89 @@ class DatabaseHelper
 
         mysqli_stmt_bind_param($statement, $types, ...$values);
 
+        $res = mysqli_stmt_execute($statement);
+
+        if ($res) {
+            mysqli_commit($this->conn);
+        } else {
+            mysqli_rollback($this->conn);
+        }
+
+        mysqli_stmt_close($statement);
+
+        return $res;
+    }
+
+    public function updateData($keyAttributesData, $nonKeyAttributesData, $formData)
+    {
+        $updateQuery = "UPDATE " . $formData['table'] . " SET ";
+
+        // Add non-key attributes to SET
+        $setValues = [];
+        foreach ($nonKeyAttributesData as $nonKeyName => $nonKeyValue) {
+            $updateQuery .= "$nonKeyName = ?, ";
+            $setValues[] = $nonKeyValue;
+        }
+
+        // Remove last comma
+        $updateQuery = rtrim($updateQuery, ', ');
+
+        // WHERE clause for key attributes
+        $updateQuery .= " WHERE ";
+
+        $whereValues = [];
+        foreach ($keyAttributesData as $keyName => $keyValue) {
+            $updateQuery .= "$keyName = ? AND ";
+            $whereValues[] = $keyValue;
+        }
+
+        // Remove last and
+        $updateQuery = substr($updateQuery, 0, -5);
+
+        $statement = mysqli_prepare($this->conn, $updateQuery);
+        if ($statement === false) {
+            return false;
+        }
+
+        // Prepare types string and values array
+        $types = str_repeat('s', count($setValues) + count($whereValues));
+        $values = array_merge($setValues, $whereValues);
+
+        mysqli_stmt_bind_param($statement, $types, ...$values);
+        $res = mysqli_stmt_execute($statement);
+
+        if ($res) {
+            mysqli_commit($this->conn);
+        } else {
+            mysqli_rollback($this->conn);
+        }
+
+        mysqli_stmt_close($statement);
+
+        return $res;
+    }
+
+    public function deleteData($keyAttributesData, $formData)
+    {
+        $deleteQuery = "DELETE FROM " . $formData['table'] . " WHERE ";
+
+        $conditions = array();
+        $values = array();
+
+        foreach ($keyAttributesData as $keyName => $keyValue) {
+            $conditions[] = "$keyName = ?";
+            $values[] = $keyValue;
+        }
+
+        $deleteQuery .= implode(' AND ', $conditions);
+
+        $statement = mysqli_prepare($this->conn, $deleteQuery);
+        if ($statement === false) {
+            return false;
+        }
+
+        $types = str_repeat('s', count($values));
+        mysqli_stmt_bind_param($statement, $types, ...$values);
         $res = mysqli_stmt_execute($statement);
 
         if ($res) {
