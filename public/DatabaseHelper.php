@@ -71,7 +71,7 @@ class DatabaseHelper
             $columnName = $columnInfo['COLUMN_NAME'];
             $dataType = $columnInfo['DATA_TYPE'];
             
-            // Handle CLOB
+            // handle CLOB
             $columnExpression = ($dataType === 'longtext') ? "CONVERT($columnName USING utf8) AS $columnName" : $columnName;
 
             $columns[] = $columnExpression;
@@ -108,7 +108,7 @@ class DatabaseHelper
         $primaryKeys = array();
         $nonPrimaryKeys = array();
 
-        // Primary key columns
+        // primary key columns
         $sql = "
             SELECT 
                 COLUMN_NAME AS PRIMARYKEYCOLUMN
@@ -126,7 +126,7 @@ class DatabaseHelper
             $primaryKeys[] = $row['PRIMARYKEYCOLUMN'];
         }
 
-        // Non-primary key columns
+        // non-primary key columns
         $sql = "
             SELECT 
                 COLUMN_NAME AS NON_PRIMARY_KEY_COLUMN
@@ -146,6 +146,46 @@ class DatabaseHelper
 
         return array('primaryKeys' => $primaryKeys, 'nonPrimaryKeys' => $nonPrimaryKeys);
     }
+    
+    public function insertIntoTable($tableName, $formData)
+    {
+        // validate input
+        if (empty($tableName) || !is_array($formData) || empty($formData)) {
+            return false;
+        }
 
+        // construct query
+        $keys = implode(", ", array_keys($formData));
+        $placeholders = rtrim(str_repeat('?, ', count($formData)), ', ');
+        $sql = "INSERT INTO $tableName ($keys) VALUES ($placeholders)";
+
+        // prepare and execute statement
+        $statement = mysqli_prepare($this->conn, $sql);
+        if ($statement === false) {
+            return false;
+        }
+
+        // prepare types string and values array
+        $types = '';
+        $values = [];
+        foreach ($formData as $value) {
+            $types .= 's';
+            $values[] = $value;
+        }
+
+        mysqli_stmt_bind_param($statement, $types, ...$values);
+
+        $res = mysqli_stmt_execute($statement);
+
+        if ($res) {
+            mysqli_commit($this->conn);
+        } else {
+            mysqli_rollback($this->conn);
+        }
+
+        mysqli_stmt_close($statement);
+
+        return $res;
+    }
 }
 
