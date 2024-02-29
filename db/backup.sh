@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CONTAINER_NAME="online_shop-db-1"
+CONTAINER_NAME="online-shop-admin-db-1"
 DB_USER="php_docker"
 DB_PASSWORD="password"
 DB_NAME="php_docker"
