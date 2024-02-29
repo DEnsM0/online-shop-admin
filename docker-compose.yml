@@ -6,10 +6,11 @@ services:
     environment:
       - MYSQL_DATABASE=php_docker
       - MYSQL_USER=php_docker
-      - MYSQL_PASSWORD=password 
-      - MYSQL_ALLOW_EMPTY_PASSWORD=1
+      - MYSQL_PASSWORD=password # this should live in an env var
+      - MYSQL_ALLOW_EMPTY_PASSWORD=1 # equivalent to True
     volumes:
       - "./db/data:/docker-entrypoint-initdb.d"
+      - "./db/create-script.sql:/create-script.sql"
     ports:
       - 3306:3306
   www:
