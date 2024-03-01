@@ -98,7 +98,7 @@ Feel free to explore and address these issues, which are conveniently listed in 
 [PHP]: https://img.shields.io/badge/php-%23777BB4.svg?style=for-the-badge&logo=php&logoColor=white
 [PHP-url]: https://www.php.net/
 
-[App_view]: https://imgur.com/a/xOckuXt
+[App_view]: https://i.imgur.com/SYgjsFK.png
 [Online-host]: https://myonlineshopadmin.000webhostapp.com/
 [Docker Documentation]: https://docs.docker.com/desktop/
 [WSL2 Installation Guide]: https://docs.microsoft.com/en-us/windows/wsl/install
